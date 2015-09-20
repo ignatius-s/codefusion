@@ -1,0 +1,97 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<beans xmlns="http://www.springframework.org/schema/beans"
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xmlns:context="http://www.springframework.org/schema/context"
+	xmlns:int="http://www.springframework.org/schema/integration"
+	xmlns:int-file="http://www.springframework.org/schema/integration/file"
+	xmlns:int-stream="http://www.springframework.org/schema/integration/stream"
+	xmlns:task="http://www.springframework.org/schema/task"
+	xsi:schemaLocation="http://www.springframework.org/schema/jms http://www.springframework.org/schema/jms/spring-jms.xsd
+        http://www.springframework.org/schema/integration http://www.springframework.org/schema/integration/spring-integration.xsd
+        http://www.springframework.org/schema/integration/file http://www.springframework.org/schema/integration/file/spring-integration-file.xsd
+        http://www.springframework.org/schema/integration/stream http://www.springframework.org/schema/integration/stream/spring-integration-stream.xsd
+        http://www.springframework.org/schema/beans http://www.springframework.org/schema/beans/spring-beans.xsd
+        http://www.springframework.org/schema/context http://www.springframework.org/schema/context/spring-context.xsd
+        http://www.springframework.org/schema/task http://www.springframework.org/schema/task/spring-task.xsd">
+
+	<!-- See also: http://static.springsource.org/spring-integration/reference/htmlsingle/#channel-adapter
+		http://www.eaipatterns.com/ChannelAdapter.html -->
+	<int-file:inbound-channel-adapter id="filesIn" directory="file:input">
+		<int:poller id="poller" fixed-rate="5000" max-messages-per-poll="10" task-executor="taskExecutor"/>
+	</int-file:inbound-channel-adapter>
+    
+	<!-- See also: http://static.springsource.org/spring-integration/reference/htmlsingle/#transformer
+		http://www.eaipatterns.com/MessageTranslator.html -->
+	<int:transformer id="CrushFile" input-channel="filesIn"
+		output-channel="routingChannel" ref="transformationHandler" method="handleFile" />
+
+	<!-- See also: http://static.springsource.org/spring-integration/reference/htmlsingle/#channel
+		http://www.eaipatterns.com/MessageChannel.html -->
+	<int:channel id="routingChannel">
+		<int:interceptors>
+			<int:wire-tap channel="loggingChannel" />
+		</int:interceptors>
+	</int:channel>
+
+	<!-- See also: http://static.springsource.org/spring-integration/reference/htmlsingle/#router
+		http://www.eaipatterns.com/MessageRouter.html -->
+	<int:header-value-router id="fileTypeRouter"
+		header-name="file_extension" input-channel="routingChannel"
+		resolution-required="false" default-output-channel="defaultFileOut">
+		<int:mapping value="json" channel="JsonChannel" />
+		<int:mapping value="err" channel="errorFileOut" />
+		
+	</int:header-value-router>
+
+	<!-- See also: http://static.springsource.org/spring-integration/reference/htmlsingle/#channel-adapter
+		http://www.eaipatterns.com/ChannelAdapter.html -->
+
+	<int-file:outbound-channel-adapter
+		id="errorFileOut" directory="file:target/output/error"
+		delete-source-files="true" channel="loggingError"/>
+	<int-file:outbound-channel-adapter
+		id="defaultFileOut" directory="file:target/output/other"
+		delete-source-files="true"/>
+		
+	
+    <int:channel id="JsonChannel">
+		
+	</int:channel>
+    
+<!--<int:transformer id="testTransformer" ref="jsonUpdate" input-channel="JsonChannel"
+             method="update" output-channel="dataOutChannel" />
+  -->
+<bean id="testTransformerBean" class="com.hack.file.json.JsonFile" />
+
+	<int:chain input-channel="JsonChannel">
+	
+	<int:transformer  ref="jsonUpdate" 
+             method="update" />
+	     
+   <int-file:outbound-channel-adapter
+		id="datsFileOut" directory="file:target/output/data"
+		delete-source-files="true"/>
+		</int:chain>
+	
+		
+   <bean id="filename-generator" class="com.hack.file.json.FileNameGen" />
+
+	<int:channel id="customErrorChannel"></int:channel>
+
+	<int:logging-channel-adapter id="loggingChannel"
+		expression="'Processing file: ' + headers.file_name + ' (' + headers.file_size + ' bytes) '" />
+
+	<int:logging-channel-adapter id="loggingError"
+		expression="'Error  file: ' + headers.file_name + ' (' + headers.file_size + ' bytes) '" />
+	
+	<bean id="transformationHandler"
+		class="com.hack.file.TransformationHandler" />
+
+	<bean id="jsonUpdate" name="jsonUpdate"
+		class="com.hack.file.json.DataUpdater">
+	</bean>
+	
+	    <task:executor id="taskExecutor" pool-size="1" />
+	
+	
+</beans>

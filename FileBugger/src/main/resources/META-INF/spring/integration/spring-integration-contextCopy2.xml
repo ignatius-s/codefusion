@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<beans xmlns="http://www.springframework.org/schema/beans" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:context="http://www.springframework.org/schema/context" xmlns:int="http://www.springframework.org/schema/integration" xmlns:int-file="http://www.springframework.org/schema/integration/file" xmlns:int-stream="http://www.springframework.org/schema/integration/stream" xmlns:task="http://www.springframework.org/schema/task"
+    xsi:schemaLocation="http://www.springframework.org/schema/jms http://www.springframework.org/schema/jms/spring-jms.xsd
+        http://www.springframework.org/schema/integration http://www.springframework.org/schema/integration/spring-integration.xsd
+        http://www.springframework.org/schema/integration/file http://www.springframework.org/schema/integration/file/spring-integration-file.xsd
+        http://www.springframework.org/schema/integration/stream http://www.springframework.org/schema/integration/stream/spring-integration-stream.xsd
+        http://www.springframework.org/schema/beans http://www.springframework.org/schema/beans/spring-beans.xsd
+        http://www.springframework.org/schema/context http://www.springframework.org/schema/context/spring-context.xsd
+        http://www.springframework.org/schema/task http://www.springframework.org/schema/task/spring-task.xsd">
+
+    <int:inbound-channel-adapter id="exchangeReplayFileAdapter" ref="exchangeReplayFileReadingMessageSource" method="receive" auto-startup="true" channel="channel1">
+        <int:poller fixed-delay="10000000" />
+    </int:inbound-channel-adapter>
+
+    <bean id="exchangeReplayFileReadingMessageSource" class="org.springframework.integration.file.FileReadingMessageSource">
+        <property name="directory" value="/tmp/inputdir" />
+    </bean>
+
+    <int:channel id="channel1">
+        <int:dispatcher task-executor="taskExecutor" />
+    </int:channel>
+
+    <int:splitter input-channel="channel1" output-channel="channel2">
+        <bean class="com.xxx.common.util.springintegration.FileSplitter" />
+    </int:splitter>
+
+    <int:channel id="channel2"></int:channel>
+    <int-stream:stdout-channel-adapter channel="channel2"></int-stream:stdout-channel-adapter>
+
+    <task:executor id="taskExecutor" pool-size="1" />
+</beans>
